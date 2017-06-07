@@ -1,0 +1,140 @@
+/*********************************************************************************************************
+*
+* File                : 24C02.c
+* Hardware Environment:
+* Build Environment   : RealView MDK-ARM  Version: 4.20
+* Version             : V1.0
+* By                  :
+*
+*                                  (c) Copyright 2005-2011, WaveShare
+*                                       http://www.waveshare.net
+*                                          All Rights Reserved
+*
+*********************************************************************************************************/
+
+/* Includes ------------------------------------------------------------------*/
+#include "driver_i2c_hal.h"
+
+#define	MPU6050Address 0xD0
+//#define	BMP180Address  0xee
+#define	BPAHAddress    0x66
+
+#define	SlaveAddress	BPAHAddress	//IIC写入时的地址字节数据，+1为读取
+
+#define hi2cx hi2c1
+extern I2C_HandleTypeDef hi2cx;
+
+
+#define hi2cbmp hi2c2
+extern I2C_HandleTypeDef hi2cbmp;
+
+
+
+
+/**************************************
+向I2C设备写入一个字节数据
+**************************************/
+HAL_StatusTypeDef HAL_I2C_WriteByte(I2C_HandleTypeDef *hi2c, uint8_t addr, uint8_t reg, uint8_t data)
+{
+    uint8_t Data[2] = {reg, data};
+    HAL_StatusTypeDef status;
+    status = HAL_I2C_Master_Transmit(hi2c, addr, Data, 2, 20);
+    //		printf("%d\t",status);
+    while(status != HAL_OK)
+    {
+        status = HAL_I2C_Master_Transmit(hi2c, addr, Data, 2, 20);
+        //				printf("%d\t",status);
+        if(HAL_I2C_GetError(hi2c) != HAL_I2C_ERROR_AF)//HAL_I2C_ERROR_BERR
+        {}
+        HAL_Delay(500);
+    }
+    return status;
+}
+/**************************************
+从I2C设备读取一个字节数据
+**************************************/
+
+uint8_t HAL_I2C_ReadByte(I2C_HandleTypeDef *hi2c, uint8_t addr, uint8_t reg)
+{
+    uint8_t REG_data;
+    while(HAL_I2C_Master_Transmit(hi2c, addr, &reg, 1, 10) != HAL_OK)//@yehangyang 4/1/2017		将while改成了if[不能改成if]
+    {
+        if(HAL_I2C_GetError(hi2c) != HAL_I2C_ERROR_AF)
+        {}
+    }
+
+    if(HAL_I2C_Master_Receive(hi2c, addr + 1, &REG_data, 1, 10) != HAL_OK)
+    {
+        if(HAL_I2C_GetError(hi2c) != HAL_I2C_ERROR_AF)
+        {}
+    }
+    return REG_data;
+}
+
+/**************************************
+从I2C设备读取size个字节数据
+**************************************/
+HAL_StatusTypeDef HAL_I2C_ReadBytes(I2C_HandleTypeDef *hi2c, uint8_t addr, uint8_t reg, uint8_t *pData, uint16_t size)
+{
+    HAL_StatusTypeDef status;
+    status = HAL_I2C_Master_Transmit(hi2c, addr, &reg, 1, 2);
+    while(status != HAL_OK)
+    {
+        if(HAL_I2C_GetError(hi2c) != HAL_I2C_ERROR_AF)
+        {}
+    }
+
+    if(HAL_I2C_Master_Receive(hi2c, addr + 1, pData, size, 20) != HAL_OK)
+    {
+        if(HAL_I2C_GetError(hi2c) != HAL_I2C_ERROR_AF)
+        {}
+    }
+    return status;
+
+}
+
+
+/** Read multiple bytes from an 8-bit device register.
+ * @param device_address I2C slave device address
+ * @param register_address First register regAddr to read from
+ * @param count Number of bytes to read
+ * @param data Buffer to store read data in
+ * @return One of @ref SD_I2C_Result enumeration
+ */
+
+uint8_t SD_I2C_ReadBytes(I2C_HandleTypeDef* hi2c, uint8_t device_address,
+                                   uint8_t register_address, uint8_t size, uint8_t *pResult)
+{
+    if(HAL_I2C_Master_Transmit(hi2c, device_address << 1, &register_address, 1, 1000) != HAL_OK )
+    {
+        return HAL_I2C_GetError(hi2c);
+    }
+    if (HAL_I2C_Master_Receive(hi2c, device_address << 1, pResult, size, 1000 ) != HAL_OK)
+    {
+        return HAL_I2C_GetError(hi2c);
+    }
+
+    return HAL_I2C_ERROR_NONE;
+}
+
+
+
+/** Read single byte from an 8-bit device register.
+ * @param device_address I2C slave device address
+ * @param register_address Register regAddr to read from
+ * @param data Container for byte value read from device
+ * @return One of @ref SD_I2C_Result enumeration
+ */
+
+uint8_t SD_I2C_ReadByte(I2C_HandleTypeDef* I2Cx, uint8_t device_address, uint8_t register_address, uint8_t *data)
+{
+	return SD_I2C_ReadBytes(I2Cx,device_address, register_address, 1, data);
+}
+
+
+
+
+
+
+
+

@@ -1,0 +1,292 @@
+/**
+ ******************************************************************************
+ * @file     Protothread.c
+ * @author   showgu
+ * @version  V0.1.0
+ * @date     05-10-2015
+ * @brief    Main Service Routines. State machine
+ *           本文件是状态机的核心部分，该状态机不具备抢占功能，在本例的操作中实
+ *           际已经演化成了按照时间片的方式了，支持阻塞操作。
+ *           函数中不具备可重入型，不能使用局部变量
+ *           本例在06-10-2015做了一个重要的修改，即：PT_Task.PT_State = do_idle;
+ *           的设定需要设置一定的条件，理由是有些全局状态是有中断传回，由于状态
+ *           机的机制，会导致中断传回的状态变量被 50 ms 的定时任务或者其他进行中
+ *           的任务直接清空。
+ ******************************************************************************
+ ******************************************************************************
+ */
+#include "VerityThread.h"
+
+
+static PT_THREAD(taskTactSwitch(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while (1)
+    {
+        PT_WAIT_UNTIL(pt, gTaskList.TactSwitch.status != NONE);
+
+        doTactSwitch(&gTaskList);//Tact Switch
+    }
+    PT_END(pt);
+}
+
+static PT_THREAD(taskSample(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while (1)
+    {
+        PT_WAIT_UNTIL(pt, (gTaskList.Sample.status != NONE && gTaskList.Sample.status != PAUSE));
+
+        doSample(&gTaskList); //Sample
+    }
+    PT_END(pt);
+}
+
+
+static PT_THREAD(taskCalculate(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while (1)
+    {
+        PT_WAIT_UNTIL(pt, gTaskList.Calculate.status != NONE);
+
+        doCalculate(&gTaskList);//Calculate
+    }
+    PT_END(pt);
+}
+
+
+static PT_THREAD(taskTransmit(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while (1)
+    {
+        PT_WAIT_UNTIL(pt, gTaskList.BleTransmit.status != NONE);
+
+        doBleTransmit(&gTaskList);//Ble Transmit
+    }
+    PT_END(pt);
+}
+
+static PT_THREAD(taskBleReceive(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while (1)
+    {
+        PT_WAIT_UNTIL(pt, gTaskList.BleReceive.status != NONE);
+
+        doBleReceive(&gTaskList);//Ble Transmit
+    }
+    PT_END(pt);
+}
+
+
+
+
+
+
+
+
+
+void ptInit(void)
+{
+    gTaskList.Mode = STAND_BY;
+	
+	gTaskList.Flag.isBleConnected=false;
+	gTaskList.Flag.isManualPause=false;
+	gTaskList.Flag.isTactSwitchOperating=false;
+	gTaskList.Flag.isCommandOperating=false;
+	gTaskList.Flag.isUserFall=false;
+
+    //对于结构体PT_Task的初始化
+    PT_INIT(&gTaskList.Sample.PT);
+    PT_INIT(&gTaskList.Calculate.PT);
+    PT_INIT(&gTaskList.BleTransmit.PT);
+    PT_INIT(&gTaskList.TactSwitch.PT);
+    PT_INIT(&gTaskList.BleReceive.PT);
+
+}
+
+
+void ptRun(void)
+{
+    taskTactSwitch(&gTaskList.TactSwitch.PT);
+    taskSample(&gTaskList.Sample.PT);
+    taskCalculate(&gTaskList.Calculate.PT);
+    taskTransmit(&gTaskList.BleTransmit.PT);
+    taskBleReceive(&gTaskList.BleReceive.PT);
+}
+
+
+
+void setWorkMode(Task_ListTypeDef *taskList, Work_ModeTypeDef mode)
+{
+    taskList->Sample.status = DONE;
+    taskList->Calculate.status = DONE;
+
+    if(mode == STAND_BY)
+    {
+        // PAH
+        PAH8001_POWER_DOWN
+
+        // Change Mode
+        taskList->Mode = STAND_BY;
+
+        // Ble setting
+        HJ_BLE_setWakeUp(false);
+    }
+    else if(mode == HEART_RATE_FUNCTION)
+    {
+        // Change Mode
+        taskList->Mode = HEART_RATE_FUNCTION;
+
+        // Task to do
+
+        // Ble setting
+        HJ_BLE_setWakeUp(false);
+    }
+    else if(mode == FALL_DETECT_ROUTINE)
+    {
+        // Change Mode
+        taskList->Mode = FALL_DETECT_ROUTINE;
+
+        // Task to do
+        taskList->Sample.status = TODO;
+
+        // Ble setting
+        HJ_BLE_setWakeUp(true);
+    }
+    else if(mode == SYNC)
+    {
+        // PAH
+        PAH8001_POWER_DOWN
+
+        // Change Mode
+        taskList->Mode = SYNC;
+
+        // Task to do
+
+
+        // Ble setting
+        HJ_BLE_setWakeUp(true);
+    }
+    else if(mode == CONFIGURATION)
+    {
+        // PAH
+        PAH8001_POWER_DOWN
+
+        // Change Mode
+        taskList->Mode = CONFIGURATION;
+
+        // Task to do
+
+        // Ble setting
+        HJ_BLE_setWakeUp(true);
+    }
+}
+
+
+
+
+void setFlagBleConnected(Task_ListTypeDef *taskList, bool isConnected)
+{
+    taskList->Flag.isBleConnected = isConnected;
+    refreshTaskList(taskList);
+}
+
+
+void setFlagTactSwitchOperating(Task_ListTypeDef *taskList, bool isOperating)
+{
+    taskList->Flag.isTactSwitchOperating = isOperating;
+    refreshTaskList(taskList);
+
+    if(isOperating)
+    {
+        taskList->TactSwitch.status = TODO;
+    }
+    else
+    {
+        taskList->TactSwitch.status = DONE;
+    }
+}
+
+
+void setFlagCommandOperating(Task_ListTypeDef *taskList, bool isOperating)
+{
+    taskList->Flag.isCommandOperating = isOperating;
+    refreshTaskList(taskList);
+}
+
+
+void setFlagUserFall(Task_ListTypeDef *taskList, bool isFall)
+{
+    taskList->Flag.isUserFall = isFall;
+    refreshTaskList(taskList);
+}
+
+void setFlagManualPause(Task_ListTypeDef *taskList, bool isPause)
+{
+	taskList->Flag.isManualPause = isPause;
+    refreshTaskList(taskList);
+}
+
+
+void refreshTaskList(Task_ListTypeDef *taskList)
+{
+    if(taskList->Mode == HEART_RATE_FUNCTION)
+    {
+        if(taskList->Flag.isTactSwitchOperating == true
+			||taskList->Flag.isCommandOperating==true
+			||taskList->Flag.isManualPause == true)
+        {
+            if(taskList->Sample.status != NONE)
+            {
+                stopSample(taskList);
+				taskList->Sample.status = PAUSE;
+
+                // Ble setting
+                HJ_BLE_setWakeUp(false);
+            }
+        }
+        else if(taskList->Sample.status == PAUSE)
+        {
+			startSample(taskList);
+          
+        }
+    }
+
+    if(taskList->Mode == FALL_DETECT_ROUTINE)
+    {
+        if(taskList->Flag.isTactSwitchOperating == true
+			||taskList->Flag.isCommandOperating==true
+|| taskList->Flag.isBleConnected == false
+||taskList->Flag.isManualPause == true)
+        {
+            if(taskList->Sample.status != NONE)
+            {
+				
+				stopSample(taskList);
+                taskList->Sample.status = PAUSE;
+ 
+
+                // Ble setting
+                HJ_BLE_setWakeUp(false);
+            }
+        }
+        else if(taskList->Sample.status == PAUSE)
+        {
+            startSample(taskList);
+			// Ble setting
+			HJ_BLE_setWakeUp(true);
+        }
+    }
+}
+
+//void resetTaskList(Task_ListTypeDef *taskList)
+//{
+//    taskList->Sample.status = DONE;
+//    taskList->Calculate.status = DONE;
+//}
+
+
+/*******************************************2015-9 sinjor****************************************/

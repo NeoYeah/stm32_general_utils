@@ -1,0 +1,37 @@
+[OPTIONS]
+Compatibility=1.1
+Full-text search=Yes
+Contents file=index.hhc
+Default Window=main
+Default topic=index.html
+Index file=index.hhk
+Language=0x409 English (United States)
+Title=Verity
+
+[WINDOWS]
+main="Verity","index.hhc","index.hhk","index.html","index.html",,,,,0x23520,,0x10387e,,,,,,,,0
+
+[FILES]
+_h_j___b_l_e_8h_source.html
+_l_t_c3553_8h_source.html
+dir_0c9106067f8060070490460a4c1c7ef1.html
+dir_3e68518f67fcffb24a02e98111fb114d.html
+dir_302b9168575d96561b3329fcb6568262.html
+dir_cf038ead9af3b722edb4dca8cf449cc2.html
+dir_ee6d13a3f6f8d1a65b8193906ffad094.html
+dir_fd58dd09c68e6af2303c549754927dcd.html
+index.html
+files.html
+tab_a.png
+tab_b.png
+tab_h.png
+tab_s.png
+nav_h.png
+nav_f.png
+bc_s.png
+doxygen.png
+closed.png
+open.png
+bdwn.png
+sync_on.png
+sync_off.png
